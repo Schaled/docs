@@ -71,6 +71,16 @@ git clone https://github.com/Mai-with-u/MaiBot.git
 
 :::
 
+::: tip
+在大陆网络环境下，从github.com克隆仓库速度可能很慢甚至根本无法克隆。这种情况下，你可以从
+git clone https://gh-proxy.com/https://github.com/Mai-with-u/MaiBot.git
+来克隆仓库。
+:::
+
+:::
+注：上述提示的加速地址可能随时间变化而失效，可以前往https://github.akams.cn，并附带仓库原地址以获得新的可用地址。
+:::
+
 进入文件夹，安装依赖：
 
 ::: code-group
@@ -121,5 +131,6 @@ http://本机IP:8001
 复制日志中的 Token，在浏览器登录页面粘贴即可进入 WebUI。后续可以在 `data/webui.json` 中查看或修改 Token。
 
 进入 WebUI 后，跟随配置向导完成模型配置和平台连接即可。
+
 
 配置模型和连接 QQ 的详细步骤，参考 [模型配置](/manual/configuration/model-config) 和 [适配器](/manual/adapters/)。
