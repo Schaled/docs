@@ -4,7 +4,9 @@ title: Linux Deployment
 
 # Linux Deployment
 
-The most direct way to run MaiBot on Linux is source deployment. macOS users can follow along too. If you'd rather not deal with Python environments, you can also use [Docker Deployment](./docker); or hand the [installation prompt](./installation-agent) to an AI assistant and let it do the work for you.
+On Linux and macOS, [Install with uv](./uv-tool) installs MaiBot and its WebUI directly. This page covers source deployment for working on the code. You can also use [Docker Deployment](./docker) or hand the [installation prompt](./installation-agent) to an AI assistant.
+
+If you do not want to maintain a Git checkout, or want one-click updates from the WebUI, use [package install and updates](./update.md).
 
 ## Prepare the Environment
 
@@ -123,3 +125,15 @@ Copy the Token from the log and paste it into the browser login page to access W
 Once in WebUI, follow the configuration wizard to set up models and connect platforms.
 
 For the next steps on configuring models and connecting to QQ, refer to [Model Configuration](/en/manual/configuration/model-config) and [Adapters](/en/manual/adapters/).
+
+## Verification and Troubleshooting
+
+**Verify** — after startup the terminal prints the WebUI address and login Token; open `http://localhost:8001`, log in, and send a line in the terminal to get a reply.
+
+**`uv: command not found`** — run `source $HOME/.local/bin/env` or open a new terminal.
+
+**Python is older than 3.12** — upgrade with pyenv or your distribution's newer package, then run `uv sync` again.
+
+**Dependency installation fails** — check network access and disk space, then retry. On slow networks, configure a PyPI mirror for uv.
+
+**WebUI does not open** — confirm `[webui].enabled = true`, port 8001 is free, and the firewall allows it when accessing remotely.

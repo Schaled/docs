@@ -20,17 +20,51 @@ from maibot_sdk import ReplyExtension
     description: str = "",                      # What the Planner sees: when to enable it
     parameters: dict | list[ToolParameterInfo], # Parameter declaration, same as Tool
     *,
+    platforms: str | list[str] | None = None,   # 平台作用域
     priority: int = 0,                          # Processing order across extensions, ascending
     timeout_ms: int = 60000,                    # Per-call timeout (milliseconds)
     chat_scope: str = "all",                    # all / group / private
     allowed_session: list[str] | None = None,   # Restrict to specific chat streams
+    platforms: str | list[str] | None = None,   # Restrict to platforms, e.g. "qq" / ["qq", "telegram"]; omitted = all
     enabled: bool = True,
 )
 ```
 
 :::
 
-`parameters` accepts a list of `ToolParameterInfo`, a property dict, or a full object JSON Schema; the main program validates types, required fields, enums, and defaults. `chat_scope` / `allowed_session` and the component enable switch follow the common component mechanism.
+`parameters` accepts a list of `ToolParameterInfo`, a property dict, or a full object JSON Schema; the main program validates types, required fields, enums, and defaults. `chat_scope` / `allowed_session` / `platforms` and the component enable switch follow the common component mechanism.
+
+## Platform Scope
+
+`platforms` restricts the chat platforms where an extension applies, using the same syntax as [Tool Components](./tools.md#platform-scope). This parameter requires `maibot-plugin-sdk>=2.14.0` and a main program that supports reply extension platform filtering; older Hosts ignore this restriction.
+
+- **Single platform** — A string such as `"qq"`.
+- **Multiple platforms** — A list such as `["qq", "telegram"]`.
+- **All platforms** — Omit the field, or use `None` or `[]`.
+
+Platform names are trimmed, lowercased, and deduplicated. Empty names, non-string elements, and other types raise an error. `platforms`, `chat_scope`, and `allowed_session` apply together; an extension can participate in a reply only when every restriction matches.
+
+::: code-group
+
+```python [Python ~vscode-icons:file-type-python~]
+from maibot_sdk import ReplyExtension
+
+@ReplyExtension(
+    "forward_images",
+    description="将图片整理为 QQ 合并转发消息",
+    parameters={"caption": {"type": "string", "default": ""}},
+    platforms="qq",
+)
+async def reply_forward_images(self, *, phase, parameters, text, messages, **context):
+    # 按 prepare / before_send 协议准备和转换本次回复。
+    return {}
+```
+
+:::
+
+The Host exposes an extension in the `reply.plugin_options` schema only on matching platforms. Manually submitting an extension for another platform is rejected before invocation, and scope is checked again before sending. Restricted extensions require a valid, matching platform context. Management inventories without chat context still show all extensions.
+
+`platforms` is part of the component declaration and stays outside the extension parameter schema, so the model cannot change it through `plugin_options`. Handlers can read the current platform from `chat["platform"]`.
 
 ## How the Parameters Appear in the reply Tool
 
@@ -153,7 +187,7 @@ def create_plugin():
 
 **My parameters don't show up in reply?**
 
-- Check the plugin is enabled and `chat_scope` / `allowed_session` match the current session
+- Check the plugin is enabled and `platforms` / `chat_scope` / `allowed_session` match the current session
 - Disabling or uninstalling removes the parameters immediately; re-enable and reload to bring them back
 
 **The reply was not sent?**

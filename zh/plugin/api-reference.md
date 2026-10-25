@@ -385,19 +385,34 @@ stream = await self.ctx.chat.open_session(
 
 `chat.open_session()` 会返回 `stream_id`、`session_id`、`chat_type`、`created` 以及完整 `stream` 对象。在多账号或多路由部署中，建议同时传入 `account_id` 和 `scope`，避免打开到错误的聊天流。
 
-`chat.get_avatar()` 返回 `status`、`url`、`expires_at` 三个键：`expires_at` 是 Unix 时间戳，`status` 为 `available` 时 `url` 是当前平台路由到的适配器给到的头像源地址。结果**不包含图片字节，也不包含 Host 文件路径**，你可以自行下载或转给前端展示。该能力需要在 manifest 的 `capabilities` 里声明 `chat.get_avatar`。
+### 头像查询 {#chat-avatar}
+
+在 `_manifest.json` 的 `capabilities` 数组中加入 `chat.get_avatar`，即可查询用户或群头像。`target_type` 为 `user` 或 `group`；多账号或多连接部署通过 `account_id`、`scope` 指定适配器路由。
+
+返回字段：
+
+::: fields
+- **`status`** — `available` 表示有头像，`unsupported` 表示适配器或目标类型不支持，`missing` 表示支持查询但目标没有头像。
+- **`url`** — `available` 时为当前路由适配器提供的 HTTP(S) 头像源地址，可独立下载；其他状态为 `None`。结果不包含图片字节或 Host 文件路径。
+- **`expires_at`** — Host 缓存到期的 Unix 时间戳，单位为秒。
+:::
 
 ::: code-group
 
 ```python [Python ~vscode-icons:file-type-python~]
 # 查询用户头像；target_type 取 "user" 或 "group"
-avatar = await self.ctx.chat.get_avatar(platform="qq", target_id="1026294844")
+avatar = await self.ctx.chat.get_avatar(
+    platform="qq", target_id="1026294844", target_type="user",
+    account_id="", scope="", force_refresh=False,
+)
 if avatar["status"] == "available":
     url = avatar["url"]              # 适配器提供的头像源地址
     expires_at = avatar["expires_at"]  # Unix 时间戳
 ```
 
 :::
+
+SDK 与 WebUI 共用 Host 头像缓存：成功结果按适配器有效期缓存，最多 24 小时；`unsupported` / `missing` 缓存 5 分钟。`force_refresh=True` 跳过现有缓存，同一目标的并发刷新合并。查询、协议校验和下载异常通过能力调用暴露，错误不缓存，也不返回过期图片。完整协议、图片限制与刷新规则见[头像接口](/develop/adapters/avatar-api)。
 
 ## maisaka — Maisaka 主动任务
 
@@ -419,11 +434,21 @@ await self.ctx.maisaka.context.append(
     visible_text="用户刚刚完成了一个插件任务",
     source_kind="plugin:calendar",
 )
+
+# 读取上下文里的图片
+image = await self.ctx.maisaka.context.resolve_image(
+    stream_id=stream["stream_id"],
+    source_id="m123",   # 消息 ID、工具媒体索引或模型看到的短消息编号
+    index=0,            # 该消息里的第几张图片，从 0 开始
+)
+# image["binary_data_base64"] 是 Base64 图片数据，image["binary_hash"] 是图片哈希
 ```
 
 :::
 
 `maisaka.proactive.trigger()` 把 `intent` 写入 Maisaka 内部上下文并唤醒 Planner，让 Maisaka 基于人格、记忆、当前上下文和可用工具自行决定是否回复以及如何表达。目标聊天流必须已经存在。
+
+`maisaka.context.resolve_image()` 只读取该聊天流**现有**上下文中的图片，不会新建会话或跨聊天流查询。成功时返回包含 `binary_data_base64` 与 `binary_hash` 的图片对象；消息不存在、序号越界、图片数据不可读或超过插件 RPC 单帧上限时会报错。目标聊天流必须已在运行时有实例。
 
 ## person — 用户信息
 
@@ -734,7 +759,7 @@ Manifest 示例：
 
 ## WebUI 上传领取
 
-`ctx.webui.claim_upload(upload_id)` 将宿主暂存的图片领取到本插件持久化数据目录的 `uploads/`，返回 `path`、`sha256` 和 `upload_id`。需要 SDK 2.11.0+、支持 `file_upload` 的宿主，以及 manifest 能力 `webui.claim_upload`。
+`ctx.webui.claim_upload(upload_id)` 将宿主暂存的图片领取到本插件持久化数据目录的 `uploads/`，返回 `path`、`sha256` 和 `upload_id`。需要 SDK 2.11.0+、支持 `image_upload` 能力的宿主，以及 manifest 能力 `webui.claim_upload`。
 
 ::: code-group
 

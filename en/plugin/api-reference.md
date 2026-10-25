@@ -385,19 +385,34 @@ stream = await self.ctx.chat.open_session(
 
 `chat.open_session()` returns `stream_id`, `session_id`, `chat_type`, `created`, and the full `stream` object. In multi-account or multi-route deployments, pass `account_id` and `scope` as well to avoid opening the wrong chat stream.
 
-`chat.get_avatar()` returns three keys — `status`, `url`, and `expires_at`: `expires_at` is a Unix timestamp, and when `status` is `available`, `url` is the avatar source address provided by the adapter that the platform currently routes to. The result contains **no image bytes and no Host file path**, so you can download it yourself or hand it to your frontend for display. This capability must be declared as `chat.get_avatar` in the manifest's `capabilities`.
+### Avatar Queries {#chat-avatar}
+
+Add `chat.get_avatar` to the `capabilities` array in `_manifest.json` to query user or group avatars. `target_type` is `user` or `group`; use `account_id` and `scope` to select the adapter route in deployments with multiple accounts or connections.
+
+Return fields:
+
+::: fields
+- **`status`** — `available` means an avatar exists, `unsupported` means the adapter or target type is unsupported, and `missing` means queries are supported but the target has no avatar.
+- **`url`** — For `available`, the HTTP(S) avatar source address provided by the currently routed adapter, which can be downloaded independently; `None` for other statuses. The result contains no image bytes or Host file path.
+- **`expires_at`** — A Unix timestamp in seconds indicating when the Host cache expires.
+:::
 
 ::: code-group
 
 ```python [Python ~vscode-icons:file-type-python~]
 # Query a user avatar; target_type is "user" or "group"
-avatar = await self.ctx.chat.get_avatar(platform="qq", target_id="1026294844")
+avatar = await self.ctx.chat.get_avatar(
+    platform="qq", target_id="1026294844", target_type="user",
+    account_id="", scope="", force_refresh=False,
+)
 if avatar["status"] == "available":
     url = avatar["url"]              # Avatar source address provided by the adapter
     expires_at = avatar["expires_at"]  # Unix timestamp
 ```
 
 :::
+
+The SDK and WebUI share the Host avatar cache: successful results use the adapter's expiry, capped at 24 hours; `unsupported` / `missing` are cached for 5 minutes. `force_refresh=True` skips the existing cache, and concurrent refreshes for the same target are combined. Query, protocol validation, and download exceptions surface through the capability call. Errors are not cached, and expired images are not returned on failure. See [Avatar API](/en/develop/adapters/avatar-api) for the full protocol, image limits, and refresh rules.
 
 ## maisaka — Maisaka Proactive Tasks
 
@@ -419,11 +434,21 @@ await self.ctx.maisaka.context.append(
     visible_text="The user has just completed a plugin task",
     source_kind="plugin:calendar",
 )
+
+# Read an image from the context
+image = await self.ctx.maisaka.context.resolve_image(
+    stream_id=stream["stream_id"],
+    source_id="m123",   # Message ID, tool media index, or the short message number the model sees
+    index=0,            # Which image in that message, starting at 0
+)
+# image["binary_data_base64"] is Base64 image data; image["binary_hash"] is the image hash
 ```
 
 :::
 
 `maisaka.proactive.trigger()` writes `intent` into Maisaka's internal context and wakes the Planner, letting Maisaka decide on its own — based on personality, memory, current context, and available tools — whether to reply and how to phrase it. The target chat stream must already exist.
+
+`maisaka.context.resolve_image()` reads images from the **existing** context of that chat stream only; it does not create a session or query another chat stream. On success it returns an image object with `binary_data_base64` and `binary_hash`. It raises an error when the message does not exist, the index is out of range, the image data is unreadable, or the image exceeds the plugin RPC frame limit. The target chat stream must already have a runtime instance.
 
 ## person — User Information
 
@@ -734,7 +759,7 @@ Manifest example:
 
 ## WebUI Upload Claims
 
-`ctx.webui.claim_upload(upload_id)` claims a host-staged image into the plugin's persistent `uploads/` directory. It returns `path`, `sha256`, and `upload_id`. Requires SDK 2.11.0+, a host supporting `file_upload`, and manifest capability `webui.claim_upload`.
+`ctx.webui.claim_upload(upload_id)` claims a host-staged image into the plugin's persistent `uploads/` directory. It returns `path`, `sha256`, and `upload_id`. Requires SDK 2.11.0+, a host supporting the `image_upload` capability, and manifest capability `webui.claim_upload`.
 
 ::: code-group
 
